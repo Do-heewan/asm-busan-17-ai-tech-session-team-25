@@ -72,8 +72,8 @@ travel-mate-agent/
         ├── core/config.py        # .env 환경 변수 관리 (Pydantic Settings)
         ├── api/routes.py         # API 라우터 (대화 턴 진행, 상태 초기화 등)
         ├── schemas/              # Pydantic 데이터 모델 규격
-        │   ├── request.py        # 유저 입력 규격
-        │   └── response.py       # 프론트로 내려보낼 최종 규격 (TurnResult 스키마 등)
+        │   ├── request.py            # client -> server 유저 입력 규격
+        │   └── response.py           # server -> client 서버 응답 규격 (TurnResult 스키마 등)
         ├── agents/               # 🧠 Agentic Workflow 핵심 로직
         │   ├── intent_classifier.py  # 유저 발화 의도 분류 (대화/도구/선택)
         │   ├── story_engine.py       # 챕터 전환 로직, 이벤트 트리거 평가, 엔딩 결정
