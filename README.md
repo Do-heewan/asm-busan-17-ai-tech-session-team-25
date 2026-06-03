@@ -50,7 +50,7 @@ travel-mate-agent/
 │   ├── package.json              # [대희 | 🔴]    
 │   ├── tsconfig.json             # [대희 | 🔴] 
 │   ├── tailwind.config.js        # [대희 | 🔴] 
-│   ├── public/assets/            # [나슬 | 🔴] 일러스트 자산 (캐릭터 표정 4종, 3개 도시 배경 등)      # 나슬님 죄송.. 사다리타기했는데 나오셨어요..   
+│   ├── public/assets/            # [나슬 | 🔴] 일러스트 자산 (캐릭터 표정 4종 등)      # 나슬님 죄송.. 사다리타기했는데 나오셨어요..   
 │   └── src/
 │       ├── main.tsx              # [대희 | 🔴] 
 │       ├── App.tsx               # [대희 | 🔴] 전체 화면 레이아웃 및 뷰 라우팅
@@ -77,6 +77,7 @@ travel-mate-agent/
         │   ├── request.py            # [재혁 | 🟢] client -> server 유저 입력 규격
         │   └── response.py           # [재혁 | 🟢] server -> client 서버 응답 규격 (TurnResult 스키마 등)
         ├── agents/               # 🧠 Agentic Workflow 핵심 로직
+        │   ├── orchestrator.py       # [재혁 | 🔴] 하단 에이전트 총괄
         │   ├── intent_classifier.py  # [혜성 | 🔴] 유저 발화 의도 분류 (대화/도구/선택)
         │   ├── story_engine.py       # [희완 | 🔴] 챕터 전환 로직, 이벤트 트리거 평가, 엔딩 결정
         │   ├── tool_router.py        # [혜성 | 🔴] 의도에 따른 도구(API) 선택 및 실행

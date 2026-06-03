@@ -9,9 +9,9 @@ class ChatRequest(BaseModel):
         ..., 
         description="유저가 방금 입력한 채팅 텍스트"
     )
-    current_chapter: str = Field(
+    current_chapter: int = Field(
         ..., 
-        description="현재 프론트엔드에서 띄우고 있는 챕터 ID (예: 'intro', 'airport')"
+        description="현재 프론트엔드에서 띄우고 있는 챕터 ID"
     )
     current_affinity: int = Field(
         ..., 
