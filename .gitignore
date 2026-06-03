@@ -1,0 +1,13 @@
+# Python
+# __pycache__/
+# *.py[cod]
+# venv/
+# .env
+
+# # Node & Frontend Build
+# node_modules/
+# frontend/dist/
+
+# # Backend Static & Memory (중요: 로컬 데이터 커밋 방지)
+# backend/static/
+# backend/app/memory/data/*.json
