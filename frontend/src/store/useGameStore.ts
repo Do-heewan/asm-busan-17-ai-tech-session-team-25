@@ -90,6 +90,10 @@ export const useGameStore = create<GameState>((set, get) => ({
       pendingChapter: result.next_chapter,
       inputLocked: true,
     }));
+    if (first === undefined) {
+      // 빈 대사 리스트: 클릭 대기 없이 즉시 전환 처리
+      get().advanceDialogue();
+    }
   },
 
   advanceDialogue: () => {

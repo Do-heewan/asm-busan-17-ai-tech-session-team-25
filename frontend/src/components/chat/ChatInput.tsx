@@ -24,7 +24,7 @@ export default function ChatInput() {
           if (e.key === 'Enter') handleSend();
         }}
         disabled={disabled}
-        placeholder={disabled ? '대사를 클릭해 진행하세요…' : '메시지를 입력하세요…'}
+        placeholder={isLoading ? '응답을 기다리는 중…' : inputLocked ? '대사를 클릭해 진행하세요…' : '메시지를 입력하세요…'}
         className="flex-1 rounded-full px-4 py-2 text-game-navy disabled:opacity-50"
       />
       <button

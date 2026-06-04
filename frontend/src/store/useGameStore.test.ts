@@ -95,6 +95,28 @@ describe('useGameStore', () => {
     expect(s.inputLocked).toBe(false);
   });
 
+  it('resolves the turn immediately on empty dialogue list (no deadlock)', async () => {
+    useGameStore.getState().startGame();
+    useGameStore.getState().advanceDialogue();
+    useGameStore.getState().advanceDialogue();
+    mockedPost.mockResolvedValue(turn({ agent_dialogue_list: [], next_chapter: null }));
+
+    await useGameStore.getState().sendMessage('안녕');
+    expect(useGameStore.getState().inputLocked).toBe(false);
+  });
+
+  it('empty dialogue list still triggers ending transition', async () => {
+    useGameStore.getState().startGame();
+    useGameStore.getState().advanceDialogue();
+    useGameStore.getState().advanceDialogue();
+    mockedPost.mockResolvedValue(turn({ agent_dialogue_list: [], next_chapter: 900 }));
+
+    await useGameStore.getState().sendMessage('안녕');
+    const s = useGameStore.getState();
+    expect(s.view).toBe('ending');
+    expect(s.endingId).toBe(900);
+  });
+
   it('ignores sendMessage while loading or with blank text', async () => {
     useGameStore.getState().startGame();
     useGameStore.getState().advanceDialogue();
