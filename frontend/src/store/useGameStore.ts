@@ -1,0 +1,109 @@
+import { create } from 'zustand';
+import type { EmotionCode, TurnResult } from '../types';
+import { postChat } from '../api/client';
+import { resolveTransition } from './turnLogic';
+import { INITIAL_AFFINITY, INITIAL_CHAPTER, OPENING_DIALOGUE } from '../config/scenes';
+
+type View = 'title' | 'game' | 'ending';
+
+interface GameState {
+  sessionId: string;
+  view: View;
+  currentChapter: number;
+  affinity: number;
+  emotion: EmotionCode;
+  dialogueQueue: string[];
+  currentLine: string | null;
+  isLoading: boolean;
+  inputLocked: boolean;
+  endingId: number | null;
+  pendingChapter: number | null; // 대사 재생 후 적용할 다음 챕터
+
+  startGame: () => void;
+  sendMessage: (text: string) => Promise<void>;
+  advanceDialogue: () => void;
+  reset: () => void;
+}
+
+function genSessionId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `sess-${Math.random().toString(36).slice(2)}`;
+}
+
+const initialState = {
+  sessionId: '',
+  view: 'title' as View,
+  currentChapter: INITIAL_CHAPTER,
+  affinity: INITIAL_AFFINITY,
+  emotion: 'idle' as EmotionCode,
+  dialogueQueue: [] as string[],
+  currentLine: null as string | null,
+  isLoading: false,
+  inputLocked: true,
+  endingId: null as number | null,
+  pendingChapter: null as number | null,
+};
+
+export const useGameStore = create<GameState>((set, get) => ({
+  ...initialState,
+
+  startGame: () => {
+    const [first, ...rest] = OPENING_DIALOGUE;
+    set({
+      ...initialState,
+      sessionId: genSessionId(),
+      view: 'game',
+      currentLine: first ?? null,
+      dialogueQueue: rest,
+      inputLocked: true,
+    });
+  },
+
+  sendMessage: async (text: string) => {
+    const { sessionId, currentChapter, affinity, isLoading } = get();
+    if (isLoading || !text.trim()) return;
+    set({ inputLocked: true, isLoading: true });
+
+    const result: TurnResult = await postChat({
+      session_id: sessionId,
+      user_message: text,
+      current_chapter: currentChapter,
+      current_affinity: affinity,
+    });
+
+    const [first, ...rest] = result.agent_dialogue_list;
+    set({
+      isLoading: false,
+      affinity: affinity + result.affinity_delta,
+      emotion: result.emotion_code,
+      currentLine: first ?? null,
+      dialogueQueue: rest,
+      pendingChapter: result.next_chapter,
+      inputLocked: true,
+    });
+  },
+
+  advanceDialogue: () => {
+    const { dialogueQueue, pendingChapter, currentChapter, isLoading } = get();
+    if (isLoading) return;
+
+    if (dialogueQueue.length > 0) {
+      const [next, ...rest] = dialogueQueue;
+      set({ currentLine: next, dialogueQueue: rest });
+      return;
+    }
+
+    const transition = resolveTransition(pendingChapter, currentChapter);
+    if (transition.type === 'continue') {
+      set({ inputLocked: false, pendingChapter: null });
+    } else if (transition.type === 'scene') {
+      set({ currentChapter: transition.chapter, inputLocked: false, pendingChapter: null });
+    } else {
+      set({ endingId: transition.endingId, view: 'ending', pendingChapter: null });
+    }
+  },
+
+  reset: () => set({ ...initialState }),
+}));
