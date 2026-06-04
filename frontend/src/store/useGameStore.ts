@@ -62,27 +62,34 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   sendMessage: async (text: string) => {
-    const { sessionId, currentChapter, affinity, isLoading } = get();
+    const { sessionId, currentChapter, isLoading } = get();
     if (isLoading || !text.trim()) return;
     set({ inputLocked: true, isLoading: true });
 
-    const result: TurnResult = await postChat({
-      session_id: sessionId,
-      user_message: text,
-      current_chapter: currentChapter,
-      current_affinity: affinity,
-    });
+    let result: TurnResult;
+    try {
+      result = await postChat({
+        session_id: sessionId,
+        user_message: text,
+        current_chapter: currentChapter,
+        current_affinity: get().affinity,
+      });
+    } catch {
+      // 네트워크/서버 실패 시 교착 방지: 상태를 풀어 재시도 가능하게 한다.
+      set({ isLoading: false, inputLocked: false });
+      return;
+    }
 
     const [first, ...rest] = result.agent_dialogue_list;
-    set({
+    set((state) => ({
       isLoading: false,
-      affinity: affinity + result.affinity_delta,
+      affinity: state.affinity + result.affinity_delta,
       emotion: result.emotion_code,
       currentLine: first ?? null,
       dialogueQueue: rest,
       pendingChapter: result.next_chapter,
       inputLocked: true,
-    });
+    }));
   },
 
   advanceDialogue: () => {

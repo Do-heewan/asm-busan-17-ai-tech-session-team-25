@@ -83,6 +83,18 @@ describe('useGameStore', () => {
     expect(s.endingId).toBe(900);
   });
 
+  it('recovers state when postChat rejects (no deadlock)', async () => {
+    useGameStore.getState().startGame();
+    useGameStore.getState().advanceDialogue();
+    useGameStore.getState().advanceDialogue();
+    mockedPost.mockRejectedValue(new Error('boom'));
+
+    await useGameStore.getState().sendMessage('안녕');
+    const s = useGameStore.getState();
+    expect(s.isLoading).toBe(false);
+    expect(s.inputLocked).toBe(false);
+  });
+
   it('ignores sendMessage while loading or with blank text', async () => {
     useGameStore.getState().startGame();
     useGameStore.getState().advanceDialogue();
