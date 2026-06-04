@@ -5,9 +5,9 @@
 # .env
 
 # # 프론트엔드 빌드 및 Node
-# node_modules/
-# frontend/dist/
-# frontend/build/
+frontend/dist/
+frontend/build/
+frontend/node_modules/
 
 # # 백엔드 정적 서빙 폴더 및 로컬 메모리 (중요: 보안 및 충돌 방지)
 # backend/static/
