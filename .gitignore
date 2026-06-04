@@ -16,3 +16,5 @@ frontend/node_modules/
 # # OS 기본 생성 파일
 # .DS_Store
 # Thumbs.db
+# Superpowers brainstorming mockups
+.superpowers/
