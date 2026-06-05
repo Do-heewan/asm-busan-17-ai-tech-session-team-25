@@ -1,4 +1,4 @@
-from app.services.amadeus_client import AmadeusClient
+from app.services.airscraper_client import AirScraperClient
 
 _NO_DESTINATION_MSG = "어디로 가고 싶은지 알려줘! 목적지가 있어야 항공편을 찾을 수 있어."
 _NO_RESULTS_MSG = "항공편을 찾을 수 없어. 날짜나 도시를 바꿔서 다시 시도해볼까?"
@@ -6,7 +6,7 @@ _NO_RESULTS_MSG = "항공편을 찾을 수 없어. 날짜나 도시를 바꿔서
 
 class ToolRouter:
     def __init__(self):
-        self._amadeus = AmadeusClient()
+        self._flight_client = AirScraperClient()
 
     def route(self, intent: str, params: dict) -> dict:
         """
@@ -38,7 +38,7 @@ class ToolRouter:
         date = params.get("date") or _default_date()
         adults = int(params.get("adults") or 1)
 
-        results = self._amadeus.search_flights(origin, destination, date, adults)
+        results = self._flight_client.search_flights(origin, destination, date, adults)
 
         if not results:
             return {
