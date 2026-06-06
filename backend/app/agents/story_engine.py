@@ -14,6 +14,9 @@ from typing import Any, Dict, List, Optional
 # 엔딩을 의미하는 특수 챕터 ID
 ENDING_CHAPTER = 99
 
+# 지연 이벤트가 발생할 수 있는 챕터(탑승 게이트). flags["flight_delayed"] 가 켜져 있어야 한다.
+_GATE_CHAPTER = 4
+
 
 @dataclass
 class Chapter:
@@ -29,12 +32,16 @@ class Chapter:
     next_id: Optional[int] = None
 
 
-# 메인 스토리 라인 (선형 진행 + 마지막에 멀티 엔딩 분기)
+# 메인 스토리 라인 (기획서 시나리오 8단계 기반의 선형 진행 + 마지막에 멀티 엔딩 분기)
+# ① 서비스 시작·소개는 챕터 0 진입에 포함된다. ⑧ 도착 후 엔딩 분기로 마무리된다.
 STORY_LINE: Dict[int, Chapter] = {
-    0: Chapter(0, "공항에서의 첫 만남", triggers=["여행", "어디", "가고싶", "시작"], next_id=1),
-    1: Chapter(1, "목적지 정하기", triggers=["파리", "도쿄", "여기", "이걸로", "결정"], next_id=2),
-    2: Chapter(2, "항공권 검색", triggers=["예약", "이 항공권", "이거 예약", "선택"], min_affinity=20, next_id=3),
-    3: Chapter(3, "탑승 게이트", triggers=["출발", "가자", "탑승", "떠나"], next_id=None),  # None -> 엔딩 분기
+    0: Chapter(0, "공항에서의 첫 만남", triggers=["여행", "어디", "가고싶", "시작", "안녕", "만나"], next_id=1),
+    1: Chapter(1, "여행지 정하기", triggers=["파리", "도쿄", "오사카", "방콕", "런던", "뉴욕", "여기로", "이걸로", "결정", "정했"], next_id=2),
+    2: Chapter(2, "항공권 검색", triggers=["검색", "찾아", "항공권", "비행기", "조회", "알아봐"], next_id=3),
+    3: Chapter(3, "항공권 선택", triggers=["예약", "이 항공권", "이거", "선택", "번째", "번으로", "골랐"], min_affinity=40, next_id=4),
+    4: Chapter(4, "탑승 게이트", triggers=["면세점", "게이트", "대기", "탑승", "기다"], next_id=5),
+    5: Chapter(5, "기내", triggers=["기내", "비행", "이륙", "출발", "떠나", "탔"], next_id=6),
+    6: Chapter(6, "도착", triggers=["도착", "내려", "왔다", "끝", "마지막"], next_id=None),  # None -> 엔딩 분기
 }
 
 
@@ -59,9 +66,21 @@ def _decide_ending(affinity: int) -> str:
 
 
 def _check_event(chapter_id: int, affinity: int, flags: Dict[str, Any]) -> Optional[str]:
-    """챕터/호감도/플래그 조합으로 발생하는 특수 이벤트를 판정한다."""
-    # 호감도가 충분히 높을 때 한 번만 발생하는 깜짝 이벤트(예: 동행 고백)
-    if affinity >= 60 and not flags.get("event_confession"):
+    """챕터/호감도/플래그 조합으로 발생하는 특수 이벤트를 판정한다.
+
+    이벤트는 각각 한 번씩만 발생하며(플래그로 중복 방지), 우선순위 순으로 평가한다.
+    """
+    # 1) 지연 이벤트: 탑승 게이트에서 도구가 지연 항공편을 반환한 경우(flight_delayed).
+    #    "지연됐대… 너랑 더 같이 있을 수 있어 싫지만은 않아" 류의 감정 대사를 유도한다.
+    if (
+        chapter_id == _GATE_CHAPTER
+        and flags.get("flight_delayed")
+        and not flags.get("event_delay")
+    ):
+        return "event_delay"
+
+    # 2) 동행 고백 이벤트: 호감도가 충분히 높을 때 한 번만 발생하는 깜짝 이벤트.
+    if affinity >= 75 and not flags.get("event_confession"):
         return "event_confession"
     return None
 
