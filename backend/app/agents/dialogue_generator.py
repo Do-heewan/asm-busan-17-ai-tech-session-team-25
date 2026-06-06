@@ -35,10 +35,15 @@ def _build_messages(
     chapter: int,
     history: List[Dict[str, str]],
     tool_result: Optional[Dict[str, Any]],
+    profile: Optional[Dict[str, Any]] = None,
+    summary: str = "",
 ) -> List[Dict[str, str]]:
     """LLM에 보낼 messages 배열을 조립한다."""
     messages: List[Dict[str, str]] = [
-        {"role": "system", "content": build_system_prompt(affinity, chapter)}
+        {
+            "role": "system",
+            "content": build_system_prompt(affinity, chapter, profile=profile, summary=summary),
+        }
     ]
     # Few-shot 예시로 출력 포맷/말투를 고정
     messages.extend(FEW_SHOT_EXAMPLES)
@@ -113,10 +118,12 @@ def _fallback(user_message: str, affinity: int) -> DialogueResult:
 def generate_dialogue(
     user_message: str,
     *,
-    affinity: int = 0,
+    affinity: int = 50,
     chapter: int = 0,
     history: Optional[List[Dict[str, str]]] = None,
     tool_result: Optional[Dict[str, Any]] = None,
+    profile: Optional[Dict[str, Any]] = None,
+    summary: str = "",
 ) -> DialogueResult:
     """최종 대사와 표정을 생성한다.
 
@@ -126,6 +133,8 @@ def generate_dialogue(
         chapter: 현재 챕터(맥락).
         history: 단기 메모리 대화 리스트(memory.store.get_short_term 결과).
         tool_result: tool_router가 반환한 도구 결과(항공권 등). 없으면 None.
+        profile: 사용자 여행 선호 프로필(store.get_profile 결과). 시스템 프롬프트에 주입.
+        summary: 이전 챕터 요약 메모리(store.get_summary 결과). 시스템 프롬프트에 주입.
 
     Returns:
         DialogueResult(dialogue_list, emotion_code). 실패 시에도 폴백으로 항상 유효한 결과.
@@ -135,7 +144,9 @@ def generate_dialogue(
     if not llm_client.is_available():
         return _fallback(user_message, affinity)
 
-    messages = _build_messages(user_message, affinity, chapter, history, tool_result)
+    messages = _build_messages(
+        user_message, affinity, chapter, history, tool_result, profile, summary
+    )
     try:
         raw = llm_client.chat(messages, temperature=0.8, max_tokens=512)
     except llm_client.LLMUnavailableError:
@@ -146,3 +157,88 @@ def generate_dialogue(
         # JSON 파싱 실패: 원문을 한 줄 대사로라도 살려준다
         return DialogueResult(dialogue_list=[raw], emotion_code=_DEFAULT_EMOTION)
     return parsed
+
+
+# =============================================================================
+# 장기 기억 보조: 사용자 프로필 추출 / 챕터 요약 (요약 메모리)
+# =============================================================================
+# 추출을 허용할 프로필 키(스키마 고정). 그 외 키는 무시한다.
+_PROFILE_KEYS = ("budget", "mood", "period", "companion", "destination")
+
+_PROFILE_PROMPT = (
+    "너는 여행 대화에서 사용자의 여행 선호만 뽑아내는 추출기다. "
+    "아래 발화에서 '명시적으로 드러난' 선호만 JSON 으로 출력한다. 추측하지 않는다.\n"
+    "키: budget(예산/가격성향), mood(여행 분위기), period(기간), companion(동행), destination(가고 싶은 도시).\n"
+    "드러나지 않은 키는 아예 포함하지 않는다. 없으면 {} 만 출력한다. JSON 외 텍스트 금지."
+)
+
+_SUMMARY_PROMPT = (
+    "너는 여행 미연시 게임의 대화 요약기다. 아래 대화를 한국어 2~3문장으로 압축한다. "
+    "결정된 여행지·항공편, 사용자의 취향, 호감도에 영향을 준 사건 위주로 사실만 담는다. "
+    "대사체가 아니라 요약 서술체로 쓴다. 요약문만 출력한다."
+)
+
+
+def _extract_json_obj(raw: str) -> Optional[dict]:
+    """LLM 응답에서 첫 JSON 오브젝트를 추출해 dict 로 반환(실패 시 None)."""
+    text = re.sub(r"^```(?:json)?|```$", "", raw.strip(), flags=re.MULTILINE).strip()
+    match = re.search(r"\{.*\}", text, flags=re.DOTALL)
+    if not match:
+        return None
+    try:
+        data = json.loads(match.group(0))
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def extract_profile(user_message: str) -> Dict[str, Any]:
+    """유저 발화에서 여행 선호 프로필을 추출한다.
+
+    명시된 선호만 담은 부분 dict 를 반환하며, 추출할 게 없거나 LLM 불가 시 빈 dict.
+    호출측(routes)이 store.update_state(profile=...) 로 누적 병합하는 것을 전제로 한다.
+    """
+    if not llm_client.is_available() or not user_message.strip():
+        return {}
+    messages = [
+        {"role": "system", "content": _PROFILE_PROMPT},
+        {"role": "user", "content": user_message},
+    ]
+    try:
+        raw = llm_client.chat(messages, temperature=0.0, max_tokens=200)
+    except llm_client.LLMUnavailableError:
+        return {}
+    data = _extract_json_obj(raw)
+    if not data:
+        return {}
+    # 허용 키 + 비어있지 않은 값만 통과시킨다.
+    return {
+        k: data[k]
+        for k in _PROFILE_KEYS
+        if data.get(k) not in (None, "", [], {})
+    }
+
+
+def generate_summary(
+    history: List[Dict[str, str]],
+    previous_summary: str = "",
+) -> str:
+    """단기 대화 기록을 요약 메모리 문자열로 압축한다(챕터 종료 시 호출 상정).
+
+    LLM 불가/실패 시 기존 요약(previous_summary)을 그대로 반환해 정보 손실을 막는다.
+    """
+    if not history or not llm_client.is_available():
+        return previous_summary
+
+    convo = "\n".join(f"{m.get('role')}: {m.get('content', '')}" for m in history)
+    context = convo if not previous_summary else f"[이전 요약]\n{previous_summary}\n\n[최근 대화]\n{convo}"
+    messages = [
+        {"role": "system", "content": _SUMMARY_PROMPT},
+        {"role": "user", "content": context},
+    ]
+    try:
+        raw = llm_client.chat(messages, temperature=0.3, max_tokens=256)
+    except llm_client.LLMUnavailableError:
+        return previous_summary
+    summary = raw.strip()
+    return summary or previous_summary
