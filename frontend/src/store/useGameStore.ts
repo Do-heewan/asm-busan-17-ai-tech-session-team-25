@@ -18,6 +18,7 @@ interface GameState {
   inputLocked: boolean;
   endingId: number | null;
   pendingChapter: number | null; // 대사 재생 후 적용할 다음 챕터
+  selections: string[];
 
   startGame: () => void;
   sendMessage: (text: string) => Promise<void>;
@@ -44,6 +45,7 @@ const initialState = {
   inputLocked: true,
   endingId: null as number | null,
   pendingChapter: null as number | null,
+  selections: [] as string[],
 };
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -64,7 +66,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   sendMessage: async (text: string) => {
     const { sessionId, currentChapter, isLoading } = get();
     if (isLoading || !text.trim()) return;
-    set({ inputLocked: true, isLoading: true });
+    set({ inputLocked: true, isLoading: true, selections: [] });
 
     let result: TurnResult;
     try {
@@ -89,6 +91,9 @@ export const useGameStore = create<GameState>((set, get) => ({
       dialogueQueue: rest,
       pendingChapter: result.next_chapter,
       inputLocked: true,
+      selections: Array.isArray(result.metadata?.selections)
+        ? (result.metadata.selections as string[])
+        : [],
     }));
     if (first === undefined) {
       // 빈 대사 리스트: 클릭 대기 없이 즉시 전환 처리
@@ -97,12 +102,17 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   advanceDialogue: () => {
-    const { dialogueQueue, pendingChapter, currentChapter, isLoading } = get();
+    const { dialogueQueue, selections, pendingChapter, currentChapter, isLoading } = get();
     if (isLoading) return;
 
     if (dialogueQueue.length > 0) {
       const [next, ...rest] = dialogueQueue;
       set({ currentLine: next, dialogueQueue: rest });
+      return;
+    }
+
+    if (selections.length > 0) {
+      set({ currentLine: null }); // DialogueBox 숨김 → SelectionMenu 출현
       return;
     }
 
