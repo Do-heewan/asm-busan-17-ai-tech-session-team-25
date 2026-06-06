@@ -24,11 +24,14 @@ PERSONA = f"""너는 사용자와 함께 여행을 계획하는 AI 여행 메이
 # 2. 말투 가이드 (호감도 단계별 톤 앤 매너)
 # =============================================================================
 # current_affinity 점수 구간에 따라 친밀도 표현 수위가 달라진다.
+# 기획서 기준 시작 호감도는 50점(탐색기)이며, 호감도가 오를수록 더 친밀해진다.
+# 구간은 시작점 50을 '탐색기'로 두도록 재조정되었다(0~100 척도).
 TONE_BY_AFFINITY = [
     # (하한 점수 포함, 라벨, 지침)
-    (0, "탐색기", "아직 막 친해지는 단계다. 예의를 지키되 다정하게, 살짝 거리를 두며 존댓말과 반말을 부드럽게 섞는다."),
-    (30, "친밀기", "꽤 친해진 사이다. 편안한 반말과 가벼운 농담을 자주 쓰고, 사용자의 취향을 적극적으로 물어본다."),
-    (60, "단짝기", "둘도 없는 단짝이다. 애정 어린 장난과 설레는 표현을 자연스럽게 쓰고, 여행에 대한 기대를 함께 부풀린다."),
+    (0, "서먹기", "관계가 서먹해진 상태다. 서운함이 살짝 묻어나지만 선을 넘지 않고, 조심스럽고 차분한 존댓말 위주로 거리를 둔다."),
+    (50, "탐색기", "이제 막 친해지는 시작 단계다. 예의를 지키되 다정하게, 살짝 거리를 두며 존댓말과 반말을 부드럽게 섞는다."),
+    (65, "친밀기", "꽤 친해진 사이다. 편안한 반말과 가벼운 농담을 자주 쓰고, 사용자의 취향을 적극적으로 물어본다."),
+    (80, "단짝기", "둘도 없는 단짝이다. 애정 어린 장난과 설레는 표현을 자연스럽게 쓰고, 여행에 대한 기대를 함께 부풀린다."),
 ]
 
 
@@ -87,24 +90,71 @@ FEW_SHOT_EXAMPLES: List[Dict[str, str]] = [
 
 
 # =============================================================================
-# 6. 시스템 프롬프트 빌더
+# 6. 컨텍스트 블록 빌더 (장기 기억 주입)
 # =============================================================================
-def build_system_prompt(affinity: int = 0, chapter: int = 0) -> str:
-    """현재 호감도·챕터 맥락을 반영한 최종 시스템 프롬프트를 조립해 반환한다.
+# 사용자 프로필 키 -> 사람이 읽기 쉬운 한글 라벨.
+_PROFILE_LABELS = {
+    "budget": "예산",
+    "mood": "여행 분위기",
+    "period": "여행 기간",
+    "companion": "동행",
+    "destination": "관심 도시",
+}
+
+
+def _profile_guide(profile: Dict[str, object]) -> str:
+    """사용자 여행 선호 프로필을 대사 생성용 컨텍스트 문장으로 변환한다."""
+    if not profile:
+        return ""
+    items = [
+        f"{_PROFILE_LABELS.get(k, k)}: {v}"
+        for k, v in profile.items()
+        if v not in (None, "", [])
+    ]
+    if not items:
+        return ""
+    return "[사용자 여행 취향] 지금까지 파악한 사용자의 선호다. 대화에 자연스럽게 반영한다.\n- " + "\n- ".join(items)
+
+
+def _summary_guide(summary: str) -> str:
+    """이전 챕터 요약(요약 메모리)을 컨텍스트 문장으로 변환한다."""
+    summary = (summary or "").strip()
+    if not summary:
+        return ""
+    return f"[지난 이야기 요약] {summary}"
+
+
+# =============================================================================
+# 7. 시스템 프롬프트 빌더
+# =============================================================================
+def build_system_prompt(
+    affinity: int = 50,
+    chapter: int = 0,
+    profile: Dict[str, object] | None = None,
+    summary: str = "",
+) -> str:
+    """현재 호감도·챕터·장기기억 맥락을 반영한 최종 시스템 프롬프트를 조립해 반환한다.
 
     Args:
         affinity: 현재 누적 호감도 점수. 말투 수위 결정에 사용.
         chapter: 현재 챕터 ID. 상황 맥락 주입에 사용.
+        profile: 사용자 여행 선호 프로필(store.get_profile 결과). 없으면 생략.
+        summary: 이전 챕터 요약 메모리(store.get_summary 결과). 없으면 생략.
 
     Returns:
         LLM 의 system 메시지로 그대로 넣을 수 있는 완성된 문자열.
     """
-    return "\n\n".join(
-        [
-            PERSONA,
-            _tone_guide(affinity),
-            f"[현재 상황] 지금은 챕터 {chapter} 진행 중이다. 맥락에 맞게 자연스럽게 대화한다.",
-            FORBIDDEN_RULES,
-            OUTPUT_FORMAT,
-        ]
-    )
+    blocks = [
+        PERSONA,
+        _tone_guide(affinity),
+        f"[현재 상황] 지금은 챕터 {chapter} 진행 중이다. 맥락에 맞게 자연스럽게 대화한다.",
+    ]
+    # 장기 기억(요약·프로필)은 있을 때만 주입한다.
+    summary_block = _summary_guide(summary)
+    if summary_block:
+        blocks.append(summary_block)
+    profile_block = _profile_guide(profile or {})
+    if profile_block:
+        blocks.append(profile_block)
+    blocks.extend([FORBIDDEN_RULES, OUTPUT_FORMAT])
+    return "\n\n".join(blocks)
