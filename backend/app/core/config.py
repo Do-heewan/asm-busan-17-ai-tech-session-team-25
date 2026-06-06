@@ -12,12 +12,19 @@ Pydantic Settings로 읽어 들여 타입 검증된 단일 `settings` 객체로 
 from functools import lru_cache
 from pathlib import Path
 
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # backend/app/core/config.py 기준으로 프로젝트 루트(레포 최상단)를 계산합니다.
 # config.py -> core -> app -> backend -> (repo root)
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
 _ENV_FILE = _PROJECT_ROOT / ".env"
+
+# .env 를 실제 프로세스 환경 변수(os.environ)에도 적재한다.
+# pydantic Settings 는 .env 를 자체적으로만 읽으므로, os.getenv 로 키를 읽는
+# 일부 모듈(intent_classifier, airscraper_client 등)도 동일한 키를 보도록 보장한다.
+# override=False 라서 이미 설정된 실제 환경 변수는 덮어쓰지 않는다.
+load_dotenv(_ENV_FILE, override=False)
 
 
 class Settings(BaseSettings):
@@ -34,7 +41,11 @@ class Settings(BaseSettings):
     UPSTAGE_BASE_URL: str = "https://api.upstage.ai/v1"
     SOLAR_MODEL: str = "solar-pro2"
 
-    # --- 2. Amadeus Flight API ---
+    # --- 2. 항공권 검색 API ---
+    # 현재는 RapidAPI Sky-Scrapper(AirScraper)를 사용한다. (Amadeus 대체)
+    RAPIDAPI_KEY: str = ""
+    RAPIDAPI_FLIGHT_HOST: str = "sky-scrapper.p.rapidapi.com"
+    # (구) Amadeus 설정 — 미사용. 호환을 위해 필드만 유지.
     AMADEUS_API_KEY: str = ""
     AMADEUS_API_SECRET: str = ""
 
