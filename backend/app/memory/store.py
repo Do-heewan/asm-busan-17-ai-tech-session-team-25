@@ -45,12 +45,14 @@ def _empty_session(session_id: str) -> Dict[str, Any]:
     """신규 세션의 기본 메모리 구조."""
     return {
         "session_id": session_id,
-        "affinity": 0,
+        # 기획서 기준 시작 호감도는 50점(중립/탐색기). 0이 아님에 유의.
+        "affinity": 50,
         "chapter": 0,
         "short_term": [],   # [{"role": "user"|"assistant", "content": str}, ...]
         "long_term": {
             "flags": {},     # 이벤트/미션 달성 플래그 (예: {"booked_flight": True})
-            "summary": "",   # 과거 대화 요약(선택적, 추후 dialogue_generator 가 갱신)
+            "summary": "",   # 이전 챕터 종료 시 LLM 으로 압축한 과거 대화 요약(요약 메모리)
+            "profile": {},   # 사용자 여행 선호 프로필 (예: {"budget": "가성비", "mood": "힐링", "companion": "혼자"})
         },
     }
 
@@ -70,6 +72,12 @@ def load_session(session_id: str) -> Dict[str, Any]:
     # 구버전/누락 필드 방어: 기본 구조와 병합한다.
     base = _empty_session(session_id)
     base.update({k: data.get(k, base[k]) for k in base})
+    # long_term 하위 키(flags/summary/profile)도 누락 시 기본값으로 채운다.
+    loaded_long = data.get("long_term") or {}
+    if isinstance(loaded_long, dict):
+        long_term = _empty_session(session_id)["long_term"]
+        long_term.update({k: loaded_long.get(k, long_term[k]) for k in long_term})
+        base["long_term"] = long_term
     return base
 
 
@@ -125,8 +133,13 @@ def update_state(
     affinity: int | None = None,
     chapter: int | None = None,
     flags: Dict[str, Any] | None = None,
+    summary: str | None = None,
+    profile: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
-    """장기 상태(호감도/챕터/플래그)를 부분 갱신하고 저장한다."""
+    """장기 상태(호감도/챕터/플래그/요약/프로필)를 부분 갱신하고 저장한다.
+
+    flags/profile 은 부분 병합(update), summary 는 통째로 교체한다.
+    """
     data = load_session(session_id)
     if affinity is not None:
         data["affinity"] = affinity
@@ -134,8 +147,22 @@ def update_state(
         data["chapter"] = chapter
     if flags:
         data["long_term"]["flags"].update(flags)
+    if summary is not None:
+        data["long_term"]["summary"] = summary
+    if profile:
+        data["long_term"]["profile"].update(profile)
     save_session(session_id, data)
     return data
+
+
+def get_summary(session_id: str) -> str:
+    """장기 요약 메모리(이전 챕터 압축본)를 반환한다. 없으면 빈 문자열."""
+    return load_session(session_id)["long_term"].get("summary", "")
+
+
+def get_profile(session_id: str) -> Dict[str, Any]:
+    """사용자 여행 선호 프로필을 반환한다. 없으면 빈 dict."""
+    return load_session(session_id)["long_term"].get("profile", {})
 
 
 def reset_session(session_id: str) -> Dict[str, Any]:
