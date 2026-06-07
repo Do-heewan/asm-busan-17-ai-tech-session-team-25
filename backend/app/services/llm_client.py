@@ -46,6 +46,7 @@ def chat(
     *,
     temperature: float = 0.8,
     max_tokens: int = 512,
+    response_format: dict | None = None,
 ) -> str:
     """Solar 모델에 채팅 메시지를 보내고 응답 본문(content) 문자열을 반환한다.
 
@@ -59,12 +60,15 @@ def chat(
     """
     client = _get_client()
     try:
-        resp = client.chat.completions.create(
+        create_kwargs: dict = dict(
             model=settings.SOLAR_MODEL,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
         )
+        if response_format:
+            create_kwargs["response_format"] = response_format
+        resp = client.chat.completions.create(**create_kwargs)
     except Exception as exc:  # openai.APIError 등 모든 통신 오류를 폴백 신호로 변환
         raise LLMUnavailableError(f"Solar API 호출 실패: {exc}") from exc
 

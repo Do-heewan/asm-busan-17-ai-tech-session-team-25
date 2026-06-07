@@ -115,7 +115,10 @@ class Orchestrator:
         # ------------------------------------------------------------------ #
         # 7. 메모리 갱신
         # ------------------------------------------------------------------ #
-        store.append_turn(request.session_id, request.user_message, dialogue.dialogue_list)
+        # fallback 응답은 history에 저장하지 않는다.
+        # 저장하면 LLM이 fallback 패턴을 학습해 반복 생성하는 악순환이 발생한다.
+        if not dialogue.is_fallback:
+            store.append_turn(request.session_id, request.user_message, dialogue.dialogue_list)
 
         extracted_profile = dialogue_generator.extract_profile(request.user_message)
 

@@ -27,6 +27,7 @@ class DialogueResult:
 
     dialogue_list: List[str] = field(default_factory=list)
     emotion_code: str = _DEFAULT_EMOTION
+    is_fallback: bool = False  # True면 LLM 실패로 더미 응답 사용 → history 저장 제외용
 
 
 def _build_messages(
@@ -126,15 +127,15 @@ def _parse_llm_json(raw: str) -> Optional[DialogueResult]:
 def _fallback(user_message: str, affinity: int) -> DialogueResult:
     """LLM 없이 동작하는 더미 대사. 호감도에 따라 톤만 약간 달리한다."""
     if affinity >= 60:
-        line = f"'{user_message}'라니 너랑 있으면 뭘 해도 설렌다니까 ㅎㅎ"
+        line = "헤헤, 나도 그 기분 알아! 우리 여행 기대된다~"
         emotion = "smile"
     elif affinity >= 30:
-        line = f"오 '{user_message}'? 좋은데! 우리 같이 더 얘기해보자!"
+        line = "오, 좋은데! 우리 같이 더 얘기해보자!"
         emotion = "smile"
     else:
-        line = f"응, '{user_message}' 말이지? 좀 더 들려줄래?"
+        line = "응, 좀 더 얘기해줄래?"
         emotion = "idle"
-    return DialogueResult(dialogue_list=[line], emotion_code=emotion)
+    return DialogueResult(dialogue_list=[line], emotion_code=emotion, is_fallback=True)
 
 
 def generate_dialogue(
@@ -170,7 +171,12 @@ def generate_dialogue(
         user_message, affinity, chapter, history, tool_result, profile, summary
     )
     try:
-        raw = llm_client.chat(messages, temperature=0.8, max_tokens=512)
+        raw = llm_client.chat(
+            messages,
+            temperature=0.8,
+            max_tokens=512,
+            response_format={"type": "json_object"},
+        )
     except llm_client.LLMUnavailableError:
         return _fallback(user_message, affinity)
 
