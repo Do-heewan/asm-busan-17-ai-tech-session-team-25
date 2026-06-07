@@ -1,89 +1,177 @@
+"""
+게임 코어 API 라우터.
+
+대화 턴 진행(/chat)과 세션 초기화(/reset)를 제공한다.
+한 번의 /chat 호출이 다음 전체 턴 루프를 수행하고 프론트엔드 규격(TurnResult)으로 반환한다.
+
+    메모리 로드 → 의도 분류(혜성) → 도구 호출(혜성) → 대사 생성(희완)
+    → 호감도 갱신(희완) → 스토리 평가(희완) → 프로필/요약 메모리 갱신 → 저장
+
+각 외부 의존(LLM·항공권 API·의도 분류기)은 키가 없거나 실패해도 안전 폴백하도록 감싸
+어떤 상황에서도 게임 턴이 완결되게 한다.
+"""
+
+from typing import Any, Dict, Optional
+
 from fastapi import APIRouter
+
 from app.schemas.request import ChatRequest
 from app.schemas.response import TurnResult
+from app.memory import store
+from app.agents import dialogue_generator, story_engine
+from app.services import affinity_calculator
 
 router = APIRouter()
 
+# 의도 분류기/도구 라우터는 무거운(외부 SDK·네트워크) 객체이므로 지연 생성한다.
+# 생성/호출 실패 시에도 파이프라인이 죽지 않도록 아래 헬퍼에서 폴백을 보장한다.
+_classifier = None
+_tool_router = None
+
+
+def _classify_intent(user_message: str, chapter: int, affinity: int) -> Dict[str, Any]:
+    """발화 의도를 분류한다(혜성 모듈). 사용 불가 시 'dialogue' 로 폴백."""
+    global _classifier
+    try:
+        if _classifier is None:
+            from app.agents.intent_classifier import IntentClassifier
+
+            _classifier = IntentClassifier()
+        return _classifier.classify(user_message, chapter, affinity)
+    except Exception:
+        return {"intent": "dialogue", "params": {}, "reason": "의도 분류기 사용 불가"}
+
+
+def _route_tool(intent: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    """의도에 맞는 도구를 호출한다(혜성 모듈). 사용 불가 시 빈 결과로 폴백."""
+    global _tool_router
+    try:
+        if _tool_router is None:
+            from app.agents.tool_router import ToolRouter
+
+            _tool_router = ToolRouter()
+        return _tool_router.route(intent, params)
+    except Exception:
+        return {"tool_name": "none", "results": [], "summary": ""}
+
+
 @router.post("/chat", response_model=TurnResult)
-async def process_chat_turn(request: ChatRequest):
-    """
-    유저의 한 턴 입력(대화/선택/도구 요청)을 받아 상태를 갱신하고 결과를 반환하는 코어 API입니다.
-    이 엔드포인트 하나로 게임의 메인 턴 루프와 씬 전환을 모두 통제합니다.
-    """
-    
-    # =========================================================================
-    # 1. 입력 데이터 수신 및 역할 설명 (State Input)
-    # =========================================================================
-    # [request.session_id]
-    #  - 유저별 고유 세션 키입니다. 백엔드 메모리 스토어(Memory Store)에서 
-    #    해당 유저의 단기 대화 내역(6~8턴) 및 장기 플래그 데이터를 로드/저장할 때 식별자로 씁니다.
-    #
-    # [request.user_message]
-    #  - 유저가 입력창에 친 실제 대사 텍스트입니다. 의도 분류기(Intent Classifier)와 
-    #    감정 분석 모듈이 이 텍스트를 파싱하여 도구 호출이나 호감도 계산을 시작합니다.
-    #
-    # [request.current_chapter]
-    #  - 현재 게임이 머물러 있는 상태(챕터 ID)입니다. (예: 'airport_waiting', 'paris_tour')
-    #    이 값에 따라 스토리 엔진이 어떤 이벤트 조건을 평가할지 결정 기준이 됩니다.
-    #
-    # [request.current_affinity]
-    #  - 프론트엔드에 저장되어 있던 현재 호감도 점수입니다. 대사 생성기(Dialogue Generator)가 
-    #    캐릭터의 대사 수위나 친밀도 표현 톤앤매너를 결정할 때 참조합니다.
-    # =========================================================================
-
+async def process_chat_turn(request: ChatRequest) -> TurnResult:
+    """유저의 한 턴 입력을 받아 상태를 갱신하고 결과를 반환하는 코어 API."""
 
     # -------------------------------------------------------------------------
-    # [개발 참고] 추후 구현될 실제 에이전틱 워크플로우(Agentic Workflow) 파이프라인 흐름:
-    # 1. intent = intent_classifier.py(request.user_message) -> 의도 파악 (대화/도구/선택)
-    # 2. if intent == "도구": tool_result = tool_router.py(...) -> Amadeus API 등 호출
-    # 3. affinity_delta = affinity_calculator.py(...) -> 호감도 변동 연산
-    # 4. final_dialogue, emotion = dialogue_generator.py(...) -> 최종 대사 및 표정 확정
-    # 5. is_trigger, next_chapter = story_engine.py(...) -> 현재 상태 기준 씬 종료 조건 평가
+    # 1. 메모리 로드 (단기 대화 + 장기 요약/프로필/플래그)
     # -------------------------------------------------------------------------
+    history = store.get_short_term(request.session_id)
+    summary = store.get_summary(request.session_id)
+    profile = store.get_profile(request.session_id)
+    flags: Dict[str, Any] = dict(store.load_session(request.session_id)["long_term"]["flags"])
 
-
-    # =========================================================================
-    # 2. 임시 가상 분기 로직 (UI 개발용 Dummy Logic)
-    # =========================================================================
-    # 프론트엔드에서 '예약' 또는 '출발'이라는 단어를 입력하면 
-    # 조건이 충족되어 다음 씬으로 전환되는 시뮬레이션을 구현했습니다.
-    is_trigger = any(keyword in request.user_message for keyword in ["예약", "출발", "가자"])
-    
-    
-    # =========================================================================
-    # 3. 최종 상태 반환 및 역할 설명 (State Output)
-    # =========================================================================
-    return TurnResult(
-        # [next_scene_trigger]
-        #  - 핵심 전환 플래그입니다. True가 내려가면 프론트엔드는 즉시 유저 입력창을 막고,
-        #    화면 페이드아웃 및 다음 챕터 연출(일러스트 교체 등)을 수행해야 함을 인지합니다.
-        next_scene_trigger=is_trigger,
-        
-        # [current_chapter]
-        #  - 유저가 계속 진행하게 될 챕터의 ID입니다.
-        #    next_scene_trigger가 True일 때는 전환될 '새 챕터 ID'가 되며, False일 때는 기존 챕터가 유지됩니다.
-        current_chapter=request.current_chapter if not is_trigger else "flight_boarding",
-        
-        # [affinity_delta]
-        #  - 이번 턴 유저의 말에 메이트가 반응하여 변화한 호감도 수치입니다. (예: +5, -2 등)
-        #    프론트엔드는 상단 게이지 바를 이 수치만큼 애니메이션 효과와 함께 실시간으로 늘리거나 줄입니다.
-        affinity_delta=3 if "좋아" in request.user_message else 1,
-        
-        # [agent_dialogue]
-        #  - 화면 대화창에 타이핑 효과로 띄워줄 캐릭터의 실제 대사 내용입니다.
-        agent_dialogue=f"응? 방금 '{request.user_message}'라고 했어? ㅎㅎ 너랑 같이 계획 짜니까 뭘 해도 다 재밌는 것 같아!",
-        
-        # [emotion_code]
-        #  - 현재 메이트의 감정 상태를 뜻하는 약속된 코드명입니다.
-        #    프론트엔드는 이 코드를 읽고 캐릭터 이미지 컴포넌트(CharacterSprite.tsx)의 소스 파일명을 매핑하여 표정을 바꿉니다.
-        emotion_code="smile" if not is_trigger else "surprise",
-        
-        # [metadata]
-        #  - 규격화되지 않은 자유 패턴 JSON 바구니입니다. 
-        #    실제 항공권 리스트 데이터(`flight_data: [...]`)나 미션 달성 힌트 등 유동적인 컨텍스트를 담아 프론트에 공유합니다.
-        metadata={
-            "is_dummy": True,
-            "received_session": request.session_id,
-            "system_hint": "대화창에 '예약' 혹은 '출발'을 입력하면 다음 씬으로 넘어가는 연출을 테스트할 수 있습니다."
-        }
+    # -------------------------------------------------------------------------
+    # 2. 의도 분류 (대화 / 도구 / 선택)
+    # -------------------------------------------------------------------------
+    intent_obj = _classify_intent(
+        request.user_message, request.current_chapter, request.current_affinity
     )
+    intent = intent_obj.get("intent", "dialogue")
+
+    # -------------------------------------------------------------------------
+    # 3. 도구 호출 (의도가 'tool' 일 때만). 항공권 등 외부 결과를 tool_result 로.
+    # -------------------------------------------------------------------------
+    tool_result: Optional[Dict[str, Any]] = None
+    if intent == "tool":
+        routed = _route_tool("tool", intent_obj.get("params", {}))
+        # 결과나 안내 메시지가 있으면 대사 생성기에 사실 근거로 전달
+        if routed.get("results") or routed.get("summary"):
+            tool_result = routed
+        # 지연 항공편이 조회되면 지연 이벤트 플래그를 켠다(story_engine 가 탑승 게이트에서 사용).
+        # NOTE: 현재 항공권 스키마에 지연 필드가 없으므로 'delayed' 키가 있을 때만 동작한다(추후 도구 보강 지점).
+        if any(r.get("delayed") for r in routed.get("results", [])):
+            flags["flight_delayed"] = True
+
+    # -------------------------------------------------------------------------
+    # 4. 최종 대사·표정 생성 (프로필/요약/도구결과 주입, 키 없으면 더미 폴백)
+    # -------------------------------------------------------------------------
+    dialogue = dialogue_generator.generate_dialogue(
+        request.user_message,
+        affinity=request.current_affinity,
+        chapter=request.current_chapter,
+        history=history,
+        tool_result=tool_result,
+        profile=profile,
+        summary=summary,
+    )
+
+    # -------------------------------------------------------------------------
+    # 5. 호감도 증감 연산 (생성된 감정 + 유저 발화 기반)
+    # -------------------------------------------------------------------------
+    affinity_delta, new_affinity = affinity_calculator.step(
+        request.current_affinity,
+        request.user_message,
+        dialogue.emotion_code,
+    )
+
+    # -------------------------------------------------------------------------
+    # 6. 스토리 평가 (씬 전환/엔딩/이벤트). flags 에 지연 플래그가 반영된다.
+    # -------------------------------------------------------------------------
+    decision = story_engine.evaluate(
+        current_chapter=request.current_chapter,
+        affinity=new_affinity,
+        user_message=request.user_message,
+        flags=flags,
+    )
+
+    # -------------------------------------------------------------------------
+    # 7. 이번 턴 대화 저장 → 사용자 프로필 추출 → (전환 시) 요약 메모리 갱신
+    # -------------------------------------------------------------------------
+    store.append_turn(request.session_id, request.user_message, dialogue.dialogue_list)
+
+    extracted_profile = dialogue_generator.extract_profile(request.user_message)
+
+    new_summary: Optional[str] = None
+    if decision.is_transition:
+        # 방금 턴까지 반영된 단기 기록으로 이전 챕터를 요약·압축한다.
+        updated_history = store.get_short_term(request.session_id)
+        new_summary = dialogue_generator.generate_summary(updated_history, summary)
+
+    # 켜진 플래그(이벤트 + 지연)를 한 번에 누적 저장
+    flag_updates: Dict[str, Any] = {}
+    if decision.event:
+        flag_updates[decision.event] = True
+    if flags.get("flight_delayed"):
+        flag_updates["flight_delayed"] = True
+
+    store.update_state(
+        request.session_id,
+        affinity=new_affinity,
+        chapter=decision.next_chapter,
+        flags=flag_updates or None,
+        summary=new_summary,
+        profile=extracted_profile or None,
+    )
+
+    # -------------------------------------------------------------------------
+    # 8. 프론트엔드 규격(TurnResult)으로 응답
+    # -------------------------------------------------------------------------
+    return TurnResult(
+        next_chapter=decision.next_chapter,
+        affinity_delta=affinity_delta,
+        agent_dialogue_list=dialogue.dialogue_list,
+        emotion_code=dialogue.emotion_code,
+        metadata={
+            "is_transition": decision.is_transition,
+            "is_ending": decision.is_ending,
+            "event": decision.event,
+            "current_affinity": new_affinity,
+            "intent": intent,
+            "tool_result": tool_result,
+            **decision.metadata,
+        },
+    )
+
+
+@router.post("/reset/{session_id}")
+async def reset_session(session_id: str) -> dict:
+    """세션 상태를 초기화한다(게임 다시 시작)."""
+    store.reset_session(session_id)
+    return {"status": "ok", "message": f"세션 '{session_id}'이(가) 초기화되었습니다."}
