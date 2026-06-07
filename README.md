@@ -51,7 +51,7 @@ travel-mate-agent/
 │   ├── index.html, vite.config.ts, tsconfig*.json, postcss.config.js  # [대희 | 🟢] 빌드/번들 설정
 │   ├── package.json              # [대희 | 🟢] 의존성 + 스크립트(dev/build/test=vitest)
 │   ├── tailwind.config.js        # [대희 | 🟢] 게임 테마(game.pink/navy) + fade-in
-│   ├── public/assets/            # [나슬 | 🟡] 캐릭터 표정 4종/배경 (규격: public/assets/README.md / 현재 임시 placeholder)
+│   ├── public/assets/            # [나슬 | 🟢] 캐릭터 표정 4종/배경 (규격: public/assets/README.md / 현재 임시 placeholder)
 │   ├── docs/superpowers/         # [대희 | 🟢] 프론트 설계 스펙 + 구현 계획 문서
 │   └── src/
 │       ├── main.tsx              # [대희 | 🟢] 앱 엔트리
@@ -76,23 +76,23 @@ travel-mate-agent/
     ├── requirements.txt          # [재혁 | 🟢] 
     ├── static/                   # [⚠️자동작업] 수동 작업 금지 (프론트 빌드 결과물이 모이는 곳)
     └── app/
-        ├── main.py               # [희완 | 🔴] FastAPI 앱 선언 및 정적 파일(static) 서빙(Mount) 처리
-        ├── core/config.py        # [희완 | 🔴] .env 환경 변수 관리 (Pydantic Settings)
-        ├── api/routes.py         # [희완 | 🔴] API 라우터 (대화 턴 진행, 상태 초기화 등)
+        ├── main.py               # [희완 | 🟢] FastAPI 앱 선언 및 정적 파일(static) 서빙(Mount) 처리
+        ├── core/config.py        # [희완 | 🟢] .env 환경 변수 관리 (Pydantic Settings)
+        ├── api/routes.py         # [희완 | 🟢] API 라우터 (대화 턴 진행, 상태 초기화 등)
         ├── schemas/              # Pydantic 데이터 모델 규격
         │   ├── request.py            # [재혁 | 🟢] client -> server 유저 입력 규격
         │   └── response.py           # [재혁 | 🟢] server -> client 서버 응답 규격 (TurnResult 스키마 등)
         ├── agents/               # 🧠 Agentic Workflow 핵심 로직
         │   ├── orchestrator.py       # [재혁 | 🔴] 하단 에이전트 총괄
-        │   ├── intent_classifier.py  # [혜성 | 🔴] 유저 발화 의도 분류 (대화/도구/선택)
-        │   ├── story_engine.py       # [희완 | 🔴] 챕터 전환 로직, 이벤트 트리거 평가, 엔딩 결정
-        │   ├── tool_router.py        # [혜성 | 🔴] 의도에 따른 도구(API) 선택 및 실행
-        │   └── dialogue_generator.py # [희완 | 🔴] 컨텍스트 종합 후 최종 대사/표정 생성 (Solar API)
+        │   ├── intent_classifier.py  # [혜성 | 🟢] 유저 발화 의도 분류 (대화/도구/선택)
+        │   ├── story_engine.py       # [희완 | 🟢] 챕터 전환 로직, 이벤트 트리거 평가, 엔딩 결정
+        │   ├── tool_router.py        # [혜성 | 🟢] 의도에 따른 도구(API) 선택 및 실행
+        │   └── dialogue_generator.py # [희완 | 🟢] 컨텍스트 종합 후 최종 대사/표정 생성 (Solar API)
         ├── services/             # 🛠️ 외부 API 연동 및 비즈니스 로직
-        │   ├── llm_client.py         # [희완 | 🔴] Upstage Solar API 통신 공통 모듈
-        │   ├── amadeus_client.py     # [혜성 | 🔴] Amadeus 항공권 검색 (캐싱 및 Fallback 포함)
-        │   └── affinity_calculator.py# [희완 | 🔴] 발화 감정 기반 호감도 증감 연산
-        ├── prompts/system_prompts.py # [희완 | 🔴] 페르소나 설정, 말투, 금지 규칙, Few-shot 예시 문자열
+        │   ├── llm_client.py         # [희완 | 🟢] Upstage Solar API 통신 공통 모듈
+        │   ├── airscraper_client.py  # [혜성 | 🟢] Amadeus 항공권 검색 (캐싱 및 Fallback 포함)
+        │   └── affinity_calculator.py# [희완 | 🟢] 발화 감정 기반 호감도 증감 연산
+        ├── prompts/system_prompts.py # [희완 | 🟢] 페르소나 설정, 말투, 금지 규칙, Few-shot 예시 문자열
         └── memory/               # 💾 로컬 세션 데이터 저장소
-            ├── store.py              # [희완 | 🔴] 단기/장기 메모리 JSON 파일 읽기/쓰기 로직
-            └── data/                 # [희완 | 🔴] 세션별 JSON 파일 저장 디렉토리 (Git 무시됨)
+            ├── store.py              # [희완 | 🟢] 단기/장기 메모리 JSON 파일 읽기/쓰기 로직
+            └── data/                 # [희완 | 🟢] 세션별 JSON 파일 저장 디렉토리 (Git 무시됨)
