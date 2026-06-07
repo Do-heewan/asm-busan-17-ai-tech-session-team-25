@@ -5,6 +5,19 @@ const TRIGGER_KEYWORDS = ['예약', '출발', '가자'];
 export function mockChat(req: ChatRequest): TurnResult {
   const msg = req.user_message;
 
+  // 선택지 트리거 — SelectionMenu 동작 테스트용
+  if (msg.includes('선택')) {
+    return {
+      next_chapter: null,
+      affinity_delta: 1,
+      agent_dialogue_list: ['어떤 걸 하고 싶어? 골라봐!'],
+      emotion_code: 'smile',
+      metadata: {
+        selections: ['파리로 가기', '도쿄로 가기', '아직 모르겠어'],
+      },
+    };
+  }
+
   // 엔딩 트리거
   if (msg.includes('엔딩')) {
     return {
