@@ -26,6 +26,12 @@ export function getBackground(chapter: number): string {
   return BACKGROUNDS[chapter] ?? FALLBACK_BACKGROUND;
 }
 
+export function getEndingBackground(affinity: number): string {
+  if (affinity >= 70) return '/assets/backgrounds/ending_happy.png';
+  if (affinity <= 30) return '/assets/backgrounds/ending_bad.png';
+  return '/assets/backgrounds/ending_normal.png';
+}
+
 export function getSprite(emotion: EmotionCode): string {
   return `/assets/characters/${emotion}.png`;
 }
