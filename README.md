@@ -41,7 +41,7 @@
 ```text
 travel-mate-agent/
 ├── README.md                 # [재혁 | 🟢] 프로젝트 실행 방법 및 환경 변수 세팅 안내 가이드                          
-├── run_local.sh              # [재혁 | 🟡] (Mac/Linux) 프론트 빌드 -> 백엔드 static 복사 -> FastAPI 실행 스크립트
+├── run_local.sh              # [재혁 | 🟢] (Mac/Linux) 프론트 빌드 -> 백엔드 static 복사 -> FastAPI 실행 스크립트
 ├── run_local.bat             # [재혁 | 🟡] (Windows) 위와 동일한 배치 스크립트
 ├── .env                      # [재혁 | 🟢] 환경변수(Upstage API, Amadeus API 등) 템플릿
 ├── .gitignore                # [재혁 | 🟢] 가상환경, 빌드 결과물, 로컬 세션 데이터 등 제외
@@ -83,7 +83,7 @@ travel-mate-agent/
         │   ├── request.py            # [재혁 | 🟢] client -> server 유저 입력 규격
         │   └── response.py           # [재혁 | 🟢] server -> client 서버 응답 규격 (TurnResult 스키마 등)
         ├── agents/               # 🧠 Agentic Workflow 핵심 로직
-        │   ├── orchestrator.py       # [재혁 | 🔴] 하단 에이전트 총괄
+        │   ├── orchestrator.py       # [재혁 | 🟢] 하단 에이전트 총괄
         │   ├── intent_classifier.py  # [혜성 | 🟢] 유저 발화 의도 분류 (대화/도구/선택)
         │   ├── story_engine.py       # [희완 | 🟢] 챕터 전환 로직, 이벤트 트리거 평가, 엔딩 결정
         │   ├── tool_router.py        # [혜성 | 🟢] 의도에 따른 도구(API) 선택 및 실행
