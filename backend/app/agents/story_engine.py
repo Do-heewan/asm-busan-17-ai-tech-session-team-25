@@ -28,6 +28,8 @@ class Chapter:
     triggers: List[str] = field(default_factory=list)
     # 전환에 필요한 최소 호감도(이 미만이면 트리거가 있어도 넘어가지 않음)
     min_affinity: int = 0
+    # 챕터 진입 후 전환을 허용하기까지 필요한 최소 대화 턴 수
+    min_turns: int = 2
     # 다음 챕터 ID (None이면 엔딩 분기 판정으로 진입)
     next_id: Optional[int] = None
 
@@ -112,16 +114,21 @@ def evaluate(
     # 1) 특수 이벤트 우선 평가(전환과 독립적으로 메타데이터로 전달)
     event = _check_event(current_chapter, affinity, flags)
 
-    # 2) 전환 조건: 트리거 키워드 매칭 + 최소 호감도 충족
+    # 2) 전환 조건: 트리거 키워드 + 최소 호감도 + 최소 대화 턴 수 충족
     triggered = any(kw in user_message for kw in chapter.triggers)
-    can_advance = triggered and affinity >= chapter.min_affinity
+    chapter_turns = flags.get("chapter_turns", 0)
+    can_advance = (
+        triggered
+        and affinity >= chapter.min_affinity
+        and chapter_turns >= chapter.min_turns
+    )
 
     if not can_advance:
         return StoryDecision(
             next_chapter=current_chapter,
             is_transition=False,
             event=event,
-            metadata={"reason": "조건 미충족(트리거/호감도)", "chapter_name": chapter.name},
+            metadata={"reason": "조건 미충족(트리거/호감도/최소턴)", "chapter_name": chapter.name},
         )
 
     # 3) 엔딩 분기(next_id가 None인 마지막 챕터)
