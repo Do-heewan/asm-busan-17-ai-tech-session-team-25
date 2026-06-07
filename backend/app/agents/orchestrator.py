@@ -69,6 +69,12 @@ class Orchestrator:
         intent = intent_obj.get("intent", "dialogue")
 
         # ------------------------------------------------------------------ #
+        # 2-b. 챕터 내 턴 카운터 증가 (story_engine 전환 조건 판정용)
+        # ------------------------------------------------------------------ #
+        chapter_turns = flags.get("chapter_turns", 0) + 1
+        flags["chapter_turns"] = chapter_turns
+
+        # ------------------------------------------------------------------ #
         # 3. 도구 호출 (intent == "tool" 일 때만)
         # ------------------------------------------------------------------ #
         tool_result: Optional[Dict[str, Any]] = None
@@ -115,7 +121,10 @@ class Orchestrator:
         # ------------------------------------------------------------------ #
         # 7. 메모리 갱신
         # ------------------------------------------------------------------ #
-        store.append_turn(request.session_id, request.user_message, dialogue.dialogue_list)
+        # fallback 응답은 history에 저장하지 않는다.
+        # 저장하면 LLM이 fallback 패턴을 학습해 반복 생성하는 악순환이 발생한다.
+        if not dialogue.is_fallback:
+            store.append_turn(request.session_id, request.user_message, dialogue.dialogue_list)
 
         extracted_profile = dialogue_generator.extract_profile(request.user_message)
 
@@ -129,6 +138,8 @@ class Orchestrator:
             flag_updates[decision.event] = True
         if flags.get("flight_delayed"):
             flag_updates["flight_delayed"] = True
+        # 챕터 전환 시 턴 카운터 리셋, 아니면 증가된 값을 저장한다.
+        flag_updates["chapter_turns"] = 0 if decision.is_transition else chapter_turns
 
         store.update_state(
             request.session_id,

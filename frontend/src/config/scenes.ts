@@ -1,8 +1,8 @@
 import type { EmotionCode } from '../types';
 
-export const ENDING_THRESHOLD = 900;
+export const ENDING_THRESHOLD = 99;   // backend ENDING_CHAPTER = 99
 export const INITIAL_CHAPTER = 1;
-export const INITIAL_AFFINITY = 0;
+export const INITIAL_AFFINITY = 50;  // backend _empty_session 초기 호감도와 동일
 export const AFFINITY_MAX = 100;
 
 // 게임 시작 시 보여줄 오프닝 대사 (백엔드 호출 없이 프론트가 시드)

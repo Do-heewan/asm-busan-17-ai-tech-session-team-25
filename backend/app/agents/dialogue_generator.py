@@ -27,6 +27,7 @@ class DialogueResult:
 
     dialogue_list: List[str] = field(default_factory=list)
     emotion_code: str = _DEFAULT_EMOTION
+    is_fallback: bool = False  # True면 LLM 실패로 더미 응답 사용 → history 저장 제외용
 
 
 def _build_messages(
@@ -66,21 +67,43 @@ def _build_messages(
     return messages
 
 
+def _extract_last_json_obj(text: str) -> Optional[str]:
+    """문자열에서 마지막 완결된 JSON 오브젝트를 추출한다.
+
+    greedy regex 대신 역방향 브레이스 매칭을 사용해
+    여러 JSON 블록이 섞여 있어도 가장 마지막(완성된) 오브젝트만 반환한다.
+    """
+    last = text.rfind("}")
+    if last == -1:
+        return None
+    depth = 0
+    for i in range(last, -1, -1):
+        if text[i] == "}":
+            depth += 1
+        elif text[i] == "{":
+            depth -= 1
+            if depth == 0:
+                return text[i : last + 1]
+    return None
+
+
 def _parse_llm_json(raw: str) -> Optional[DialogueResult]:
     """LLM 응답 문자열에서 {dialogue, emotion} JSON을 견고하게 파싱한다.
 
-    코드블록 표시(```)나 앞뒤 잡텍스트가 섞여 와도 첫 JSON 오브젝트를 추출한다.
+    코드펜스·// 주석·앞뒤 잡텍스트 제거 후 마지막 유효 JSON 오브젝트를 추출한다.
     파싱 실패 시 None을 반환해 호출측이 폴백하게 한다.
     """
     text = raw.strip()
     # ```json ... ``` 같은 코드펜스 제거
     text = re.sub(r"^```(?:json)?|```$", "", text, flags=re.MULTILINE).strip()
-    # 가장 바깥 중괄호 블록만 추출
-    match = re.search(r"\{.*\}", text, flags=re.DOTALL)
-    if not match:
+    # // 한 줄 주석 제거 (LLM이 템플릿 주석을 그대로 출력하는 경우 대비)
+    text = re.sub(r"//[^\n]*", "", text)
+    # 마지막 완결된 JSON 오브젝트 추출
+    candidate = _extract_last_json_obj(text)
+    if candidate is None:
         return None
     try:
-        data = json.loads(match.group(0))
+        data = json.loads(candidate)
     except json.JSONDecodeError:
         return None
 
@@ -104,15 +127,15 @@ def _parse_llm_json(raw: str) -> Optional[DialogueResult]:
 def _fallback(user_message: str, affinity: int) -> DialogueResult:
     """LLM 없이 동작하는 더미 대사. 호감도에 따라 톤만 약간 달리한다."""
     if affinity >= 60:
-        line = f"'{user_message}'라니 너랑 있으면 뭘 해도 설렌다니까 ㅎㅎ"
+        line = "헤헤, 나도 그 기분 알아! 우리 여행 기대된다~"
         emotion = "smile"
     elif affinity >= 30:
-        line = f"오 '{user_message}'? 좋은데! 우리 같이 더 얘기해보자!"
+        line = "오, 좋은데! 우리 같이 더 얘기해보자!"
         emotion = "smile"
     else:
-        line = f"응, '{user_message}' 말이지? 좀 더 들려줄래?"
+        line = "응, 좀 더 얘기해줄래?"
         emotion = "idle"
-    return DialogueResult(dialogue_list=[line], emotion_code=emotion)
+    return DialogueResult(dialogue_list=[line], emotion_code=emotion, is_fallback=True)
 
 
 def generate_dialogue(
@@ -148,14 +171,18 @@ def generate_dialogue(
         user_message, affinity, chapter, history, tool_result, profile, summary
     )
     try:
-        raw = llm_client.chat(messages, temperature=0.8, max_tokens=512)
+        raw = llm_client.chat(
+            messages,
+            temperature=0.8,
+            max_tokens=512,
+            response_format={"type": "json_object"},
+        )
     except llm_client.LLMUnavailableError:
         return _fallback(user_message, affinity)
 
     parsed = _parse_llm_json(raw)
     if parsed is None:
-        # JSON 파싱 실패: 원문을 한 줄 대사로라도 살려준다
-        return DialogueResult(dialogue_list=[raw], emotion_code=_DEFAULT_EMOTION)
+        return _fallback(user_message, affinity)
     return parsed
 
 
