@@ -57,7 +57,9 @@ def _build_messages(
             {
                 "role": "system",
                 "content": (
-                    "[도구 조회 결과] 아래 데이터에 근거해서만 사실(가격/일정 등)을 말한다:\n"
+                    "[도구 조회 결과] 항공편 검색 결과가 있다. "
+                    "결과 상세(가격·편명·시간)는 UI가 직접 표시하므로 절대 나열하지 말 것. "
+                    "몇 개 찾았는지 + 골라보라는 짧은 한 줄 대사만 생성할 것.\n"
                     + json.dumps(tool_result, ensure_ascii=False)
                 ),
             }
