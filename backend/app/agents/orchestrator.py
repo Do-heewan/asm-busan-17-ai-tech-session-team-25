@@ -111,11 +111,18 @@ class Orchestrator:
         # ------------------------------------------------------------------ #
         # 6. 스토리 평가 (씬 전환 / 엔딩 / 이벤트)
         # ------------------------------------------------------------------ #
+        # 키워드 매칭 실패 시 LLM이 챕터 목표 달성 여부를 보조 판정한다.
+        llm_triggered = dialogue_generator.check_transition_intent(
+            chapter=request.current_chapter,
+            user_message=request.user_message,
+            history=history,
+        )
         decision = story_engine.evaluate(
             current_chapter=request.current_chapter,
             affinity=new_affinity,
             user_message=request.user_message,
             flags=flags,
+            llm_triggered=llm_triggered,
         )
 
         # ------------------------------------------------------------------ #

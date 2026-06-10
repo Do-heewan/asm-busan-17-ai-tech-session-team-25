@@ -7,7 +7,7 @@ interface Props {
 export default function SceneBackground({ chapter }: Props) {
   return (
     <img
-      key={chapter}
+      key={getBackground(chapter)}
       src={getBackground(chapter)}
       alt=""
       className="absolute inset-0 h-full w-full object-cover animate-fade-in"
