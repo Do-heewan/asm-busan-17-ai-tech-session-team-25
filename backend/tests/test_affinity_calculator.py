@@ -84,3 +84,23 @@ def test_positive_keyword_with_smile():
 def test_negative_keyword_molla_with_idle():
     """'몰라' + idle: 키워드(-3) + emotion(0) = -3."""
     assert compute_delta("몰라", "idle") == -3
+
+
+# ---------------------------------------------------------------------------
+# system_prompts OUTPUT_FORMAT 감정 정의 확인
+# ---------------------------------------------------------------------------
+from app.prompts.system_prompts import OUTPUT_FORMAT
+
+def test_output_format_idle_is_default():
+    """OUTPUT_FORMAT에 idle이 기본값임이 명시되어야 한다."""
+    assert "기본값" in OUTPUT_FORMAT
+
+
+def test_output_format_surprise_excludes_excitement():
+    """OUTPUT_FORMAT에서 surprise가 설렘을 포함하지 않아야 한다."""
+    assert "설렘" not in OUTPUT_FORMAT
+
+
+def test_output_format_sad_includes_disengagement_cue():
+    """OUTPUT_FORMAT에서 sad가 무관심 반응에 대한 안내를 포함해야 한다."""
+    assert "무관심" in OUTPUT_FORMAT
