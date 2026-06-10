@@ -246,6 +246,55 @@ def extract_profile(user_message: str) -> Dict[str, Any]:
     }
 
 
+# 챕터별 전환 판정 기준 (LLM이 YES/NO로 답하는 질문 형태)
+_CHAPTER_GOALS: Dict[int, str] = {
+    0: "사용자가 여행을 시작하거나 어디로 갈지 관심을 보였는가?",
+    1: "사용자가 여행지(도시 또는 나라)를 결정했는가?",
+    2: "사용자가 항공권 검색을 요청했는가?",
+    3: "사용자가 특정 항공권을 선택하거나 예약 의사를 밝혔는가?",
+    4: "사용자가 탑승 게이트로 이동하거나 탑승 준비를 했는가?",
+    5: "사용자가 비행기에 탑승했거나 이륙했는가?",
+    6: "사용자가 목적지에 도착했거나 여행이 끝났는가?",
+}
+
+_TRANSITION_JUDGE_PROMPT = (
+    "너는 여행 게임의 챕터 전환 판정기다.\n"
+    "[챕터 목표]를 기준으로 [유저 발화]가 해당 목표를 달성했는지 판정한다.\n"
+    "YES 또는 NO 만 출력한다. 다른 텍스트는 절대 출력하지 않는다."
+)
+
+
+def check_transition_intent(
+    chapter: int,
+    user_message: str,
+    history: List[Dict[str, str]],
+) -> bool:
+    """LLM으로 챕터 전환 의도를 판정한다.
+
+    키워드 매칭이 실패했을 때 보조 판정자로 사용한다.
+    LLM 불가 또는 판정 실패 시 False 를 반환해 기존 룰 기반 판정에 위임한다.
+    """
+    if not llm_client.is_available():
+        return False
+    goal = _CHAPTER_GOALS.get(chapter)
+    if not goal:
+        return False
+
+    recent = history[-3:] if len(history) > 3 else history
+    convo = "\n".join(f"{m['role']}: {m['content']}" for m in recent) if recent else "(대화 없음)"
+
+    user_content = f"[챕터 목표] {goal}\n[최근 대화]\n{convo}\n[유저 발화] {user_message}"
+    messages = [
+        {"role": "system", "content": _TRANSITION_JUDGE_PROMPT},
+        {"role": "user", "content": user_content},
+    ]
+    try:
+        raw = llm_client.chat(messages, temperature=0.0, max_tokens=5)
+    except llm_client.LLMUnavailableError:
+        return False
+    return raw.strip().upper().startswith("YES")
+
+
 def generate_summary(
     history: List[Dict[str, str]],
     previous_summary: str = "",

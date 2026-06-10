@@ -40,7 +40,7 @@ STORY_LINE: Dict[int, Chapter] = {
     0: Chapter(0, "공항에서의 첫 만남", triggers=["여행", "어디", "가고싶", "시작", "안녕", "만나"], next_id=1),
     1: Chapter(1, "여행지 정하기", triggers=["파리", "도쿄", "오사카", "방콕", "런던", "뉴욕", "여기로", "이걸로", "결정", "정했"], next_id=2),
     2: Chapter(2, "항공권 검색", triggers=["검색", "찾아", "항공권", "비행기", "조회", "알아봐"], next_id=3),
-    3: Chapter(3, "항공권 선택", triggers=["예약", "이 항공권", "이거", "선택", "번째", "번으로", "골랐"], min_affinity=40, next_id=4),
+    3: Chapter(3, "항공권 선택", triggers=["예약", "이 항공권", "이거", "이걸로", "선택", "번째", "번으로", "골랐", "결정", "정했", "좋아", "할게", "해줘", "부탁", "확인", "오케이", "ㅇㅋ"], min_affinity=0, next_id=4),
     4: Chapter(4, "탑승 게이트", triggers=["면세점", "게이트", "대기", "탑승", "기다"], next_id=5),
     5: Chapter(5, "기내", triggers=["기내", "비행", "이륙", "출발", "떠나", "탔"], next_id=6),
     6: Chapter(6, "도착", triggers=["도착", "내려", "왔다", "끝", "마지막"], next_id=None),  # None -> 엔딩 분기
@@ -92,6 +92,7 @@ def evaluate(
     affinity: int,
     user_message: str,
     flags: Optional[Dict[str, Any]] = None,
+    llm_triggered: bool = False,
 ) -> StoryDecision:
     """현재 상태 기준 씬 종료/전환/엔딩 조건을 평가한다.
 
@@ -114,8 +115,9 @@ def evaluate(
     # 1) 특수 이벤트 우선 평가(전환과 독립적으로 메타데이터로 전달)
     event = _check_event(current_chapter, affinity, flags)
 
-    # 2) 전환 조건: 트리거 키워드 + 최소 호감도 + 최소 대화 턴 수 충족
-    triggered = any(kw in user_message for kw in chapter.triggers)
+    # 2) 전환 조건: (키워드 매칭 OR LLM 판정) + 최소 호감도 + 최소 대화 턴 수 충족
+    keyword_triggered = any(kw in user_message for kw in chapter.triggers)
+    triggered = keyword_triggered or llm_triggered
     chapter_turns = flags.get("chapter_turns", 0)
     can_advance = (
         triggered

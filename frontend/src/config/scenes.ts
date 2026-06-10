@@ -15,9 +15,12 @@ const FALLBACK_BACKGROUND = '/assets/backgrounds/default.png';
 
 // 챕터 번호 → 배경 이미지. 나슬님이 public/assets/backgrounds 에 파일을 채우면 됨.
 const BACKGROUNDS: Record<number, string> = {
+  0: '/assets/backgrounds/ch1.png',
   1: '/assets/backgrounds/ch1.png',
-  2: '/assets/backgrounds/ch2.png',
-  3: '/assets/backgrounds/ch3.png',
+  2: '/assets/backgrounds/ch1.png',
+  3: '/assets/backgrounds/ch1.png',
+  4: '/assets/backgrounds/ch2.png',
+  5: '/assets/backgrounds/ch3.png',
   // 엔딩(>=900) 배경
   900: '/assets/backgrounds/ending.png',
 };
