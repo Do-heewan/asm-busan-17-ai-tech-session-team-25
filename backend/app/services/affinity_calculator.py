@@ -17,8 +17,8 @@ AFFINITY_MAX = 100
 # 캐릭터가 느낀 감정(emotion_code)이 호감도에 주는 기본 가중치.
 # 캐릭터가 기뻐했다면 관계가 가까워진 것이고, 서운했다면 멀어진 것으로 본다.
 _EMOTION_WEIGHT: Dict[str, int] = {
-    "smile": 3,
-    "surprise": 2,
+    "smile": 2,
+    "surprise": 1,
     "idle": 0,
     "sad": -3,
 }
@@ -31,6 +31,7 @@ _POSITIVE_KEYWORDS = (
 _NEGATIVE_KEYWORDS = (
     "싫어", "별로", "짜증", "그만", "관심없", "노잼", "최악", "꺼져",
     "바보", "멍청", "지겨", "귀찮",
+    "몰라", "아무거나", "상관없어", "됐어", "빼줘", "패스", "피곤해", "졸려",
 )
 
 
