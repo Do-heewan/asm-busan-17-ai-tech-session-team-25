@@ -17,6 +17,11 @@ ENDING_CHAPTER = 99
 # 지연 이벤트가 발생할 수 있는 챕터(탑승 게이트). flags["flight_delayed"] 가 켜져 있어야 한다.
 _GATE_CHAPTER = 4
 
+# 자동 전환이 적용되는 최소 챕터 ID (이 값 이상의 챕터에 적용)
+AUTO_ADVANCE_MIN_CHAPTER = 4
+# 자동 전환을 발동하는 최소 챕터 내 턴 수
+AUTO_ADVANCE_TURNS = 5
+
 
 @dataclass
 class Chapter:
@@ -114,6 +119,28 @@ def evaluate(
 
     # 1) 특수 이벤트 우선 평가(전환과 독립적으로 메타데이터로 전달)
     event = _check_event(current_chapter, affinity, flags)
+
+    # 1-b) 자동 전환: 챕터 AUTO_ADVANCE_MIN_CHAPTER 이상에서 turns >= AUTO_ADVANCE_TURNS
+    if (
+        current_chapter >= AUTO_ADVANCE_MIN_CHAPTER
+        and flags.get("chapter_turns", 0) >= AUTO_ADVANCE_TURNS
+    ):
+        if chapter.next_id is None:
+            ending_code = _decide_ending(affinity)
+            return StoryDecision(
+                next_chapter=ENDING_CHAPTER,
+                is_transition=True,
+                is_ending=True,
+                event=event,
+                metadata={"nudge": True, "ending": ending_code, "final_affinity": affinity},
+            )
+        next_ch = STORY_LINE[chapter.next_id]
+        return StoryDecision(
+            next_chapter=next_ch.id,
+            is_transition=True,
+            event=event,
+            metadata={"nudge": True, "from": chapter.name, "to": next_ch.name},
+        )
 
     # 2) 전환 조건: (키워드 매칭 OR LLM 판정) + 최소 호감도 + 최소 대화 턴 수 충족
     keyword_triggered = any(kw in user_message for kw in chapter.triggers)

@@ -1,5 +1,15 @@
 export type EmotionCode = 'idle' | 'smile' | 'sad' | 'surprise';
 
+export interface FlightResult {
+  airline: string;
+  flight_number: string;
+  departure: string;
+  arrival: string;
+  price_krw: number;
+  duration: string;
+  stops: number;
+}
+
 export interface ChatRequest {
   session_id: string;
   user_message: string;

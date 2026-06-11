@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { EmotionCode, TurnResult } from '../types';
+import type { EmotionCode, FlightResult, TurnResult } from '../types';
 import { postChat } from '../api/client';
 import { resolveTransition } from './turnLogic';
 import { INITIAL_AFFINITY, INITIAL_CHAPTER, OPENING_DIALOGUE } from '../config/scenes';
@@ -19,6 +19,7 @@ interface GameState {
   endingId: number | null;
   pendingChapter: number | null; // 대사 재생 후 적용할 다음 챕터
   selections: string[];
+  flightResults: FlightResult[];
 
   startGame: () => void;
   sendMessage: (text: string) => Promise<void>;
@@ -46,6 +47,7 @@ const initialState = {
   endingId: null as number | null,
   pendingChapter: null as number | null,
   selections: [] as string[],
+  flightResults: [] as FlightResult[],
 };
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -66,7 +68,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   sendMessage: async (text: string) => {
     const { sessionId, currentChapter, isLoading } = get();
     if (isLoading || !text.trim()) return;
-    set({ inputLocked: true, isLoading: true, selections: [] });
+    set({ inputLocked: true, isLoading: true, selections: [], flightResults: [] });
 
     let result: TurnResult;
     try {
@@ -82,6 +84,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       return;
     }
 
+    const rawFlights = result.metadata?.tool_result as { results?: FlightResult[] } | undefined;
     const [first, ...rest] = result.agent_dialogue_list;
     set((state) => ({
       isLoading: false,
@@ -91,6 +94,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       dialogueQueue: rest,
       pendingChapter: result.next_chapter,
       inputLocked: true,
+      flightResults: rawFlights?.results ?? [],
       selections: Array.isArray(result.metadata?.selections)
         ? (result.metadata.selections as string[])
         : [],
@@ -102,12 +106,17 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   advanceDialogue: () => {
-    const { dialogueQueue, selections, pendingChapter, currentChapter, isLoading } = get();
+    const { dialogueQueue, flightResults, selections, pendingChapter, currentChapter, isLoading } = get();
     if (isLoading) return;
 
     if (dialogueQueue.length > 0) {
       const [next, ...rest] = dialogueQueue;
       set({ currentLine: next, dialogueQueue: rest });
+      return;
+    }
+
+    if (flightResults.length > 0) {
+      set({ currentLine: null });
       return;
     }
 

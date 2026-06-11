@@ -38,6 +38,7 @@ def _build_messages(
     tool_result: Optional[Dict[str, Any]],
     profile: Optional[Dict[str, Any]] = None,
     summary: str = "",
+    nudge_transition: bool = False,
 ) -> List[Dict[str, str]]:
     """LLM에 보낼 messages 배열을 조립한다."""
     messages: List[Dict[str, str]] = [
@@ -57,8 +58,22 @@ def _build_messages(
             {
                 "role": "system",
                 "content": (
-                    "[도구 조회 결과] 아래 데이터에 근거해서만 사실(가격/일정 등)을 말한다:\n"
+                    "[도구 조회 결과] 항공편 검색 결과가 있다. "
+                    "결과 상세(가격·편명·시간)는 UI가 직접 표시하므로 절대 나열하지 말 것. "
+                    "몇 개 찾았는지 + 골라보라는 짧은 한 줄 대사만 생성할 것.\n"
                     + json.dumps(tool_result, ensure_ascii=False)
+                ),
+            }
+        )
+
+    if nudge_transition:
+        messages.append(
+            {
+                "role": "system",
+                "content": (
+                    "[장면 전환 유도] 이번 대사에서 자연스럽게 다음 장면으로 넘어가는 "
+                    "흐름을 만들어. '가자'처럼 직접적으로 말하지 말고, "
+                    "캐릭터 말투에 맞게 상황을 마무리하는 뉘앙스를 담아."
                 ),
             }
         )
@@ -147,6 +162,7 @@ def generate_dialogue(
     tool_result: Optional[Dict[str, Any]] = None,
     profile: Optional[Dict[str, Any]] = None,
     summary: str = "",
+    nudge_transition: bool = False,
 ) -> DialogueResult:
     """최종 대사와 표정을 생성한다.
 
@@ -168,7 +184,8 @@ def generate_dialogue(
         return _fallback(user_message, affinity)
 
     messages = _build_messages(
-        user_message, affinity, chapter, history, tool_result, profile, summary
+        user_message, affinity, chapter, history, tool_result, profile, summary,
+        nudge_transition=nudge_transition,
     )
     try:
         raw = llm_client.chat(

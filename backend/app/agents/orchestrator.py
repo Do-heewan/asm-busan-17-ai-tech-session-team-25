@@ -87,30 +87,9 @@ class Orchestrator:
                 flags["flight_delayed"] = True
 
         # ------------------------------------------------------------------ #
-        # 4. 대사·표정 생성
+        # 4. 스토리 평가 (씬 전환 / 엔딩 / 이벤트)
         # ------------------------------------------------------------------ #
-        dialogue = dialogue_generator.generate_dialogue(
-            request.user_message,
-            affinity=request.current_affinity,
-            chapter=request.current_chapter,
-            history=history,
-            tool_result=tool_result,
-            profile=profile,
-            summary=summary,
-        )
-
-        # ------------------------------------------------------------------ #
-        # 5. 호감도 증감 연산
-        # ------------------------------------------------------------------ #
-        affinity_delta, new_affinity = affinity_calculator.step(
-            request.current_affinity,
-            request.user_message,
-            dialogue.emotion_code,
-        )
-
-        # ------------------------------------------------------------------ #
-        # 6. 스토리 평가 (씬 전환 / 엔딩 / 이벤트)
-        # ------------------------------------------------------------------ #
+        # nudge 플래그를 대사 생성에 전달하기 위해 story_engine을 먼저 실행한다.
         # 키워드 매칭 실패 시 LLM이 챕터 목표 달성 여부를 보조 판정한다.
         llm_triggered = dialogue_generator.check_transition_intent(
             chapter=request.current_chapter,
@@ -119,10 +98,34 @@ class Orchestrator:
         )
         decision = story_engine.evaluate(
             current_chapter=request.current_chapter,
-            affinity=new_affinity,
+            affinity=request.current_affinity,
             user_message=request.user_message,
             flags=flags,
             llm_triggered=llm_triggered,
+        )
+
+        # ------------------------------------------------------------------ #
+        # 5. 대사·표정 생성
+        # ------------------------------------------------------------------ #
+        nudge = decision.metadata.get("nudge", False)
+        dialogue = dialogue_generator.generate_dialogue(
+            request.user_message,
+            affinity=request.current_affinity,
+            chapter=request.current_chapter,
+            history=history,
+            tool_result=tool_result,
+            profile=profile,
+            summary=summary,
+            nudge_transition=nudge,
+        )
+
+        # ------------------------------------------------------------------ #
+        # 6. 호감도 증감 연산 (emotion_code 확정 후)
+        # ------------------------------------------------------------------ #
+        affinity_delta, new_affinity = affinity_calculator.step(
+            request.current_affinity,
+            request.user_message,
+            dialogue.emotion_code,
         )
 
         # ------------------------------------------------------------------ #

@@ -117,6 +117,48 @@ describe('useGameStore', () => {
     expect(s.endingId).toBe(900);
   });
 
+  it('sendMessage populates flightResults when tool_result.results is present', async () => {
+    useGameStore.getState().startGame();
+    useGameStore.getState().advanceDialogue();
+    useGameStore.getState().advanceDialogue();
+    const flights = [
+      { airline: 'Korean Air', flight_number: 'KE001', departure: '2026-08-01T09:00:00', arrival: '2026-08-01T11:30:00', price_krw: 320000, duration: '2시간 30분', stops: 0 },
+      { airline: 'Jeju Air', flight_number: '7C101', departure: '2026-08-01T18:30:00', arrival: '2026-08-01T21:00:00', price_krw: 198000, duration: '2시간 30분', stops: 0 },
+    ];
+    mockedPost.mockResolvedValue(
+      turn({ agent_dialogue_list: ['찾았어!'], metadata: { tool_result: { results: flights } } }),
+    );
+    await useGameStore.getState().sendMessage('도쿄 항공권 찾아줘');
+    expect(useGameStore.getState().flightResults).toEqual(flights);
+  });
+
+  it('advanceDialogue sets currentLine null when flightResults is set', async () => {
+    useGameStore.getState().startGame();
+    useGameStore.getState().advanceDialogue();
+    useGameStore.getState().advanceDialogue();
+    const flights = [
+      { airline: 'Korean Air', flight_number: 'KE001', departure: '2026-08-01T09:00:00', arrival: '2026-08-01T11:30:00', price_krw: 320000, duration: '2시간 30분', stops: 0 },
+    ];
+    mockedPost.mockResolvedValue(
+      turn({ agent_dialogue_list: ['찾았어!'], metadata: { tool_result: { results: flights } } }),
+    );
+    await useGameStore.getState().sendMessage('도쿄 항공권 찾아줘');
+    useGameStore.getState().advanceDialogue();
+    const s = useGameStore.getState();
+    expect(s.currentLine).toBeNull();
+    expect(s.flightResults).toEqual(flights);
+    expect(s.inputLocked).toBe(true);
+  });
+
+  it('flightResults is empty when response has no tool_result', async () => {
+    useGameStore.getState().startGame();
+    useGameStore.getState().advanceDialogue();
+    useGameStore.getState().advanceDialogue();
+    mockedPost.mockResolvedValue(turn({ agent_dialogue_list: ['안녕!'], metadata: {} }));
+    await useGameStore.getState().sendMessage('안녕');
+    expect(useGameStore.getState().flightResults).toEqual([]);
+  });
+
   it('ignores sendMessage while loading or with blank text', async () => {
     useGameStore.getState().startGame();
     useGameStore.getState().advanceDialogue();
