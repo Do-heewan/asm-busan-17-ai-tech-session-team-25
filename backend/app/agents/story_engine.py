@@ -65,7 +65,7 @@ class StoryDecision:
 
 def _decide_ending(affinity: int) -> str:
     """출발 시점의 누적 호감도로 멀티 엔딩을 결정한다."""
-    if affinity >= 70:
+    if affinity >= 90:
         return "ending_best"     # 최고의 동행 엔딩
     if affinity >= 40:
         return "ending_good"     # 무난한 여행 엔딩

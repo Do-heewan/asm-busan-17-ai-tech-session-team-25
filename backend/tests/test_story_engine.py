@@ -44,10 +44,10 @@ def test_auto_advance_chapter5_at_turn5():
 
 
 def test_auto_advance_chapter6_ending_best():
-    """챕터 6에서 chapter_turns == 5, 호감도 >= 70이면 엔딩(99)으로 자동 전환된다."""
+    """챕터 6에서 chapter_turns == 5, 호감도 >= 90이면 엔딩(99)으로 자동 전환된다."""
     decision = evaluate(
         current_chapter=6,
-        affinity=70,
+        affinity=90,
         user_message="",
         flags={"chapter_turns": 5},
     )
@@ -59,10 +59,10 @@ def test_auto_advance_chapter6_ending_best():
 
 
 def test_auto_advance_chapter6_ending_good():
-    """챕터 6에서 호감도 40~69이면 ending_good."""
+    """챕터 6에서 호감도 40~89이면 ending_good."""
     decision = evaluate(
         current_chapter=6,
-        affinity=50,
+        affinity=70,
         user_message="",
         flags={"chapter_turns": 5},
     )
